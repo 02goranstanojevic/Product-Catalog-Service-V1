@@ -5,6 +5,7 @@ import (
 	"github.com/product-catalog-service/internal/app/product/queries/list_products"
 	"github.com/product-catalog-service/internal/app/product/usecases/activate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/apply_discount"
+	"github.com/product-catalog-service/internal/app/product/usecases/archive_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/create_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/deactivate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/remove_discount"
@@ -17,6 +18,7 @@ type Commands struct {
 	UpdateProduct     *update_product.Interactor
 	ActivateProduct   *activate_product.Interactor
 	DeactivateProduct *deactivate_product.Interactor
+	ArchiveProduct    *archive_product.Interactor
 	ApplyDiscount     *apply_discount.Interactor
 	RemoveDiscount    *remove_discount.Interactor
 }

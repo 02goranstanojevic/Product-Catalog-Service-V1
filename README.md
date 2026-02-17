@@ -37,91 +37,150 @@ migrations/          -> Spanner DDL
 
 ### Trade-offs
 
-- **Proto types are hand-written stubs** - avoids requiring `protoc` tooling for local dev. gRPC method descriptors and handler routing are wired manually (matching protoc-generated patterns). Run `make proto` to generate from `.proto` files when protoc is available; the proto codec requires protoc-generated types for on-the-wire serialization.
+- **Proto and gRPC bindings are generated** - Go bindings are generated from `proto/product/v1/product_service.proto`. Use `make proto` (powered by `buf`) to regenerate after proto changes.
 - **Custom CommitPlan instead of `github.com/Vektor-AI/commitplan`** - The `commitplan` module is internal to the organization and not publicly available.  The internal `pkg/committer` package follows the same pattern: `NewPlan()` -> `plan.Add(mutation)` -> `committer.Apply(ctx, plan)`, providing identical semantics with Spanner's `Apply` for atomic transactions.
 - The outbox processor is not implemented - events are stored but not dispatched. This is by design per the spec.
 - No authentication, metrics, or REST gateway.
 
-## Prerequisites
+## Setup and Run
+
+### Requirements
 
 - Go 1.21+
-- Docker (for Spanner emulator)
-- `gcloud` CLI (for migrations)
-- `make` (optional, mostly for Linux/macOS convenience)
+- Docker (Spanner emulator)
+- Google Cloud CLI (`gcloud`)
+- Make (for Make workflow)
 
-### Windows Note
+Install references:
+- Go: https://go.dev/dl/
+- Docker: https://www.docker.com/products/docker-desktop/
+- gcloud: https://cloud.google.com/sdk/docs/install
 
-On Windows, use `scripts/run.ps1` as the primary workflow. `make` is optional and not required.
+## Workflow 1: Make (first)
 
-## Quick Start
+Follow this exact order: clone, open project, install requirements, init, start, check.
 
-For Windows, prefer the `scripts/run.ps1` flow in **Local Run Order (Client Review)** below.
+### 1) Clone
 
 ```bash
-# Start Spanner emulator
-make emulator-up
+git clone https://github.com/02goranstanojevic/Product-Catalog-Service-V1.git
+cd Product-Catalog-Service-V1
+```
 
-# Create instance, database, and apply schema
-make migrate
+### 2) Open project
 
-# Build and run the gRPC server
+```bash
+code .
+```
+
+### 3) Install requirements
+
+Ensure `go`, `docker`, `gcloud`, and `make` are available in your PATH.
+
+### 4) Initialize
+
+```bash
+make init
+```
+
+What `make init` does:
+- starts Spanner emulator (`make emulator-up`)
+- runs database migration (`make migrate`)
+
+### 5) Start service
+
+```bash
 make run
+```
 
-# Run unit tests (no emulator needed)
+### 6) Check
+
+```bash
 make test-unit
-
-# Run all tests including E2E (emulator required)
 make test
 ```
 
-## Local Run Order (Client Review)
+Pyramid diagram (Make flow):
 
-Use the commands below in this exact order for a clean local backend verification.
+```mermaid
+flowchart BT
+  A[Check: make test-unit / make test]
+  B[Start: make run]
+  C[Init: make init]
+  D[Install: go + docker + gcloud + make]
+  E[Open: code .]
+  F[Clone: git clone + cd]
 
-### Option A: PowerShell script (Windows, fastest)
+  A --> B --> C --> D --> E --> F
+```
+
+## Workflow 2: PowerShell
+
+Use this flow on Windows when you prefer script-based commands.
+
+### 1) Clone
 
 ```powershell
-# 1) Start emulator
+git clone https://github.com/02goranstanojevic/Product-Catalog-Service-V1.git
+Set-Location Product-Catalog-Service-V1
+```
+
+### 2) Open project
+
+```powershell
+code .
+```
+
+### 3) Install requirements
+
+Ensure `go`, `docker`, and `gcloud` are available in your PATH.
+
+### 4) Initialize
+
+```powershell
 .\scripts\run.ps1 -Action up
-
-# 2) Apply schema
 .\scripts\run.ps1 -Action migrate
+```
 
-# 3) Run full test suite (unit + e2e)
-.\scripts\run.ps1 -Action test
+### 5) Start service
 
-# 4) Start backend server
+```powershell
 .\scripts\run.ps1 -Action run
 ```
 
-### Option B: Makefile commands
+### 6) Check
 
-Use this if `make` is installed on your system.
+```powershell
+.\scripts\run.ps1 -Action test
+go test ./internal/app/product/domain/... -v -count=1
+```
 
-```bash
-# 1) Start emulator
-make emulator-up
+Pyramid diagram (PowerShell flow):
 
-# 2) Apply schema
-make migrate
+```mermaid
+flowchart BT
+  A[Check: run.ps1 test + domain tests]
+  B[Start: run.ps1 -Action run]
+  C[Init: run.ps1 up + migrate]
+  D[Install: go + docker + gcloud]
+  E[Open: code .]
+  F[Clone: git clone + Set-Location]
 
-# 3) Run full test suite (unit + e2e)
-make test
-
-# 4) Start backend server
-make run
+  A --> B --> C --> D --> E --> F
 ```
 
 ### Stop local infrastructure
 
-```powershell
-.\scripts\run.ps1 -Action down
-```
-
-or
+Make:
 
 ```bash
 make emulator-down
+```
+
+PowerShell:
+
+```powershell
+.\scripts\run.ps1 -Action down
 ```
 
 ## Environment Variables
@@ -136,7 +195,7 @@ make emulator-down
 
 The service exposes a gRPC `ProductService` with:
 
-**Commands**: `CreateProduct`, `UpdateProduct`, `ActivateProduct`, `DeactivateProduct`, `ApplyDiscount`, `RemoveDiscount`
+**Commands**: `CreateProduct`, `UpdateProduct`, `ActivateProduct`, `DeactivateProduct`, `ArchiveProduct`, `ApplyDiscount`, `RemoveDiscount`
 
 **Queries**: `GetProduct`, `ListProducts` (with category filter and pagination)
 

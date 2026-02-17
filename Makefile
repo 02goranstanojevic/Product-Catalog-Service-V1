@@ -1,4 +1,8 @@
-.PHONY: all build run test proto migrate clean emulator-up emulator-down
+.PHONY: all build run test test-unit proto migrate init clean emulator-up emulator-down
+
+ifeq ($(OS),Windows_NT)
+POWERSHELL := powershell.exe -NoProfile -ExecutionPolicy Bypass
+endif
 
 PROJECT_ID := test-project
 INSTANCE_ID := test-instance
@@ -8,6 +12,19 @@ SPANNER_DB := projects/$(PROJECT_ID)/instances/$(INSTANCE_ID)/databases/$(DATABA
 
 all: build
 
+ifeq ($(OS),Windows_NT)
+build:
+	go build -o bin/server.exe ./cmd/server
+
+run:
+	@$(POWERSHELL) -File scripts/run.ps1 -Action run
+
+test:
+	@$(POWERSHELL) -File scripts/run.ps1 -Action test
+
+test-unit:
+	go test ./internal/app/product/domain/... -v -count=1
+else
 build:
 	go build -o bin/server ./cmd/server
 
@@ -22,6 +39,7 @@ test:
 
 test-unit:
 	go test ./internal/app/product/domain/... -v -count=1
+endif
 
 emulator-up:
 	docker-compose up -d
@@ -29,6 +47,10 @@ emulator-up:
 emulator-down:
 	docker-compose down
 
+ifeq ($(OS),Windows_NT)
+migrate:
+	@$(POWERSHELL) -File scripts/run.ps1 -Action migrate
+else
 migrate:
 	@echo "Creating Spanner instance and database on emulator..."
 	gcloud config configurations create emulator --no-activate 2>/dev/null || true
@@ -40,11 +62,18 @@ migrate:
 		--project=$(PROJECT_ID) \
 		--ddl-file=migrations/001_initial_schema.sql 2>/dev/null || true
 	@echo "Migration complete."
+endif
+
+init:
+	$(MAKE) emulator-up
+	$(MAKE) migrate
 
 proto:
-	protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/product/v1/product_service.proto
+	go run github.com/bufbuild/buf/cmd/buf@v1.34.0 generate
 
 clean:
+ifeq ($(OS),Windows_NT)
+	@if exist bin rmdir /s /q bin
+else
 	rm -rf bin/
+endif

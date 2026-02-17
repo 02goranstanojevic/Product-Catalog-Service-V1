@@ -7,6 +7,7 @@ import (
 	"github.com/product-catalog-service/internal/app/product/repo"
 	"github.com/product-catalog-service/internal/app/product/usecases/activate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/apply_discount"
+	"github.com/product-catalog-service/internal/app/product/usecases/archive_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/create_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/deactivate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/remove_discount"
@@ -33,6 +34,7 @@ func NewContainer(spannerClient *spanner.Client) *Container {
 		UpdateProduct:     update_product.New(productRepo, outboxRepo, comm, spannerClient),
 		ActivateProduct:   activate_product.New(productRepo, outboxRepo, comm, spannerClient),
 		DeactivateProduct: deactivate_product.New(productRepo, outboxRepo, comm, spannerClient),
+		ArchiveProduct:    archive_product.New(productRepo, outboxRepo, comm, spannerClient, clk),
 		ApplyDiscount:     apply_discount.New(productRepo, outboxRepo, comm, spannerClient, clk),
 		RemoveDiscount:    remove_discount.New(productRepo, outboxRepo, comm, spannerClient),
 	}

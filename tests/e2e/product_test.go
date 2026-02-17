@@ -23,6 +23,7 @@ import (
 	"github.com/product-catalog-service/internal/app/product/repo"
 	"github.com/product-catalog-service/internal/app/product/usecases/activate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/apply_discount"
+	"github.com/product-catalog-service/internal/app/product/usecases/archive_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/create_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/deactivate_product"
 	"github.com/product-catalog-service/internal/app/product/usecases/remove_discount"
@@ -193,6 +194,7 @@ type testEnv struct {
 	updateProduct     *update_product.Interactor
 	activateProduct   *activate_product.Interactor
 	deactivateProduct *deactivate_product.Interactor
+	archiveProduct    *archive_product.Interactor
 	applyDiscount     *apply_discount.Interactor
 	removeDiscount    *remove_discount.Interactor
 	getProduct        *get_product.Query
@@ -214,6 +216,7 @@ func newTestEnv() *testEnv {
 		updateProduct:     update_product.New(productRepo, outboxRepo, comm, spannerClient),
 		activateProduct:   activate_product.New(productRepo, outboxRepo, comm, spannerClient),
 		deactivateProduct: deactivate_product.New(productRepo, outboxRepo, comm, spannerClient),
+		archiveProduct:    archive_product.New(productRepo, outboxRepo, comm, spannerClient, clk),
 		applyDiscount:     apply_discount.New(productRepo, outboxRepo, comm, spannerClient, clk),
 		removeDiscount:    remove_discount.New(productRepo, outboxRepo, comm, spannerClient),
 		getProduct:        get_product.New(readModel, spannerClient),
@@ -353,6 +356,22 @@ func TestProductActivationDeactivation(t *testing.T) {
 
 	product, _ = env.getProduct.Execute(env.ctx, productID)
 	assert.Equal(t, "INACTIVE", product.Status)
+}
+
+func TestProductArchiveFlow(t *testing.T) {
+	env := newTestEnv()
+	productID := env.createActiveProduct(t)
+
+	err := env.archiveProduct.Execute(env.ctx, archive_product.Request{ProductID: productID})
+	require.NoError(t, err)
+
+	product, err := env.getProduct.Execute(env.ctx, productID)
+	require.NoError(t, err)
+	assert.Equal(t, "ARCHIVED", product.Status)
+	assert.NotEmpty(t, product.UpdatedAt)
+
+	err = env.activateProduct.Execute(env.ctx, activate_product.Request{ProductID: productID})
+	assert.ErrorIs(t, err, domain.ErrProductArchived)
 }
 
 func TestBusinessRuleValidation_DiscountOnInactiveProduct(t *testing.T) {

@@ -67,18 +67,27 @@ function Invoke-Migrate {
     $gcloud = Resolve-GcloudCommand
     $env:SPANNER_EMULATOR_HOST = "localhost:9010"
 
-    & $gcloud config configurations create emulator --no-activate 2>$null | Out-Null
+    try {
+        & $gcloud config configurations create emulator --no-activate *>$null
+    } catch {}
+    $global:LASTEXITCODE = 0
 
-    & $gcloud spanner instances create $InstanceId `
-        --config=emulator-config `
-        --description="Test Instance" `
-        --nodes=1 `
-        --project=$ProjectId 2>$null | Out-Null
+    try {
+        & $gcloud spanner instances create $InstanceId `
+            --config=emulator-config `
+            --description="Test Instance" `
+            --nodes=1 `
+            --project=$ProjectId *>$null
+    } catch {}
+    $global:LASTEXITCODE = 0
 
-    & $gcloud spanner databases create $DatabaseId `
-        --instance=$InstanceId `
-        --project=$ProjectId `
-        --ddl-file=migrations/001_initial_schema.sql 2>$null | Out-Null
+    try {
+        & $gcloud spanner databases create $DatabaseId `
+            --instance=$InstanceId `
+            --project=$ProjectId `
+            --ddl-file=migrations/001_initial_schema.sql *>$null
+    } catch {}
+    $global:LASTEXITCODE = 0
 
     Write-Host "Migration complete." -ForegroundColor Green
 }
@@ -89,9 +98,39 @@ function Invoke-Tests {
     go test ./... -v -count=1
 }
 
+function Ensure-PortAvailable {
+    param(
+        [string]$Port
+    )
+
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $listener) {
+        return
+    }
+
+    $ownerPid = $listener.OwningProcess
+    $proc = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+    if (-not $proc) {
+        return
+    }
+
+    if ($proc.ProcessName -eq "server") {
+        Write-Host "Port $Port is already in use by previous server process (PID: $ownerPid). Stopping it..." -ForegroundColor Yellow
+        Stop-Process -Id $ownerPid -Force
+        Start-Sleep -Milliseconds 300
+        return
+    }
+
+    throw "Port $Port is in use by process '$($proc.ProcessName)' (PID: $ownerPid). Stop that process or set PORT to another value before running."
+}
+
 function Start-Server {
     Assert-Command -Name "go" -InstallHint "Install Go 1.21+ and ensure 'go' is available in PATH."
     go build -o bin/server ./cmd/server
+    $port = if ($env:PORT) { $env:PORT } else { "50051" }
+
+    Ensure-PortAvailable -Port $port
+
     $env:SPANNER_EMULATOR_HOST = "localhost:9010"
     $env:SPANNER_DATABASE = $SpannerDatabase
 
